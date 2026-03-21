@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sonsuz Labirent Macerası</title>
+    <style>
+        :root {
+            --bg-color: #1a1a2e;
+            --game-bg: #16213e;
+            --wall-color: #0f3460;
+            --path-color: #e94560;
+            --player-color: #fca311;
+            --exit-color: #00b4d8;
+            --text-color: #fff;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+
+        h1 {
+            margin: 0 0 10px 0;
+            font-size: 28px;
+            color: var(--exit-color);
+            text-shadow: 0 0 10px rgba(0, 180, 216, 0.5);
+        }
+
+        #game-wrapper {
+            position: relative;
+            background-color: var(--game-bg);
+            padding: 25px;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.6), inset 0 0 15px rgba(233, 69, 96, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.05);
+        }
+
+        #hud {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            font-size: 20px;
+            font-weight: bold;
+            gap: 15px;
+        }
+
+        .stat-box {
+            flex: 1;
+            text-align: center;
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            padding: 12px;
+            border-radius: 12px;
+            box-shadow: 0 6px 10px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: transform 0.2s;
+        }
+
+        .stat-box.score {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+        }
+        
+        .stat-box.level {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+        }
+
+        canvas {
+            background-color: var(--path-color); /* Base background for visited effect */
+            border-radius: 8px;
+            border: 4px solid #0f3460;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            image-rendering: pixelated;
+        }
+
+        #game-over {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(26, 26, 46, 0.9);
+            backdrop-filter: blur(5px);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 20px;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        #game-over.show {
+            display: flex;
+            opacity: 1;
+        }
+
+        #game-over h2 {
+            color: #e74c3c;
+            font-size: 56px;
+            margin: 0 0 10px 0;
+            text-shadow: 0 0 20px rgba(231, 76, 60, 0.5);
+        }
+
+        #game-over p {
+            font-size: 24px;
+            margin-bottom: 30px;
+            color: #bdc3c7;
+        }
+
+        .highlight {
+            color: #f1c40f;
+            font-weight: bold;
+            font-size: 32px;
+        }
+
+        button {
+            padding: 15px 35px;
+            font-size: 22px;
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            font-weight: bold;
+            box-shadow: 0 8px 15px rgba(0,0,0,0.3);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        button:hover {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 12px 20px rgba(0,0,0,0.4);
+            background: linear-gradient(135deg, #2980b9, #2471a3);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        #controls {
+            margin-top: 25px;
+            text-align: center;
+            color: #95a5a6;
+            font-size: 14px;
+        }
+
+        .key {
+            display: inline-block;
+            background-color: #2c3e50;
+            padding: 5px 10px;
+            border-radius: 5px;
+            margin: 0 3px;
+            color: #ecf0f1;
+            font-weight: bold;
+            border-bottom: 3px solid #1a252f;
+        }
+
+        /* Confetti effect canvas for win */
+        #confetti {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="confetti" width="100%" height="100%"></canvas>
+
+    <h1>🧭 Labirent Macerası</h1>
+    <div id="game-wrapper">
+        <div id="hud">
+            <div class="stat-box level">Seviye: <span id="level">1</span></div>
+            <div class="stat-box score">Puan: <span id="score">0</span></div>
+            <div class="stat-box">Süre: <span id="time">45</span>s</div>
+        </div>
+        
+        <canvas id="mazeCanvas" width="440" height="440"></canvas>
+        
+        <div id="game-over">
+            <h2 id="end-title">Süre Bitti!</h2>
+            <p>Seviye: <span class="highlight" id="final-level">1</span> <br><br> Puan: <span class="highlight" id="final-score">0</span></p>
+            <button onclick="startGame()">Yeniden Başla</button>
+        </div>
+    </div>
+    
+    <div id="controls">
+        Hareket: <span class="key">Yön Tuşları</span> veya <span class="key">W</span> <span class="key">A</span> <span class="key">S</span> <span class="key">D</span><br><br>
+        Süreniz bitmeden mavi çıkış noktasına ulaşın! Her seviyede labirent büyür.
+    </div>
+
+    <script>
+        const canvas = document.getElementById('mazeCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let cellCount = 10; // Starts easy
+        let cellSize = canvas.width / cellCount;
+        
+        let maze = [];
+        let player = { x: 0, y: 0 };
+        let exit = { x: 0, y: 0 };
+        
+        let score = 0;
+        let level = 1;
+        let timeLeft = 45;
+        let gameInterval;
+        let isGameOver = false;
+
+        // Colors
+        const colBg = '#ecf0f1';
+        const colWall = '#2c3e50';
+        const colPath = '#ecf0f1';
+        const colPlayer = '#e74c3c';
+        const colExit = '#3498db';
+
+        class Cell {
+            constructor(i, j) {
+                this.i = i;
+                this.j = j;
+                this.walls = [true, true, true, true]; // top, right, bottom, left
+                this.visited = false;
+            }
+
+            draw() {
+                const x = this.i * cellSize;
+                const y = this.j * cellSize;
+
+                // Cell background
+                ctx.fillStyle = colPath;
+                ctx.fillRect(x, y, cellSize, cellSize);
+
+                ctx.strokeStyle = colWall;
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                
+                // Top
+                if (this.walls[0]) { ctx.moveTo(x, y); ctx.lineTo(x + cellSize, y); }
+                // Right
+                if (this.walls[1]) { ctx.moveTo(x + cellSize, y); ctx.lineTo(x + cellSize, y + cellSize); }
+                // Bottom
+                if (this.walls[2]) { ctx.moveTo(x + cellSize, y + cellSize); ctx.lineTo(x, y + cellSize); }
+                // Left
+                if (this.walls[3]) { ctx.moveTo(x, y + cellSize); ctx.lineTo(x, y); }
+                
+                ctx.stroke();
+            }
+        }
+
+        function index(i, j) {
+            if (i < 0 || j < 0 || i > cellCount - 1 || j > cellCount - 1) return -1;
+            return i + j * cellCount;
+        }
+
+        function checkNeighbors(cell) {
+            let neighbors = [];
+            let top    = maze[index(cell.i, cell.j - 1)];
+            let right  = maze[index(cell.i + 1, cell.j)];
+            let bottom = maze[index(cell.i, cell.j + 1)];
+            let left   = maze[index(cell.i - 1, cell.j)];
+
+            if (top && !top.visited) neighbors.push(top);
+            if (right && !right.visited) neighbors.push(right);
+            if (bottom && !bottom.visited) neighbors.push(bottom);
+            if (left && !left.visited) neighbors.push(left);
+
+            if (neighbors.length > 0) {
+                let r = Math.floor(Math.random() * neighbors.length);
+                return neighbors[r];
+            } else {
+                return undefined;
+            }
+        }
+
+        function removeWalls(a, b) {
+            let x = a.i - b.i;
+            if (x === 1) { a.walls[3] = false; b.walls[1] = false; }
+            else if (x === -1) { a.walls[1] = false; b.walls[3] = false; }
+
+            let y = a.j - b.j;
+            if (y === 1) { a.walls[0] = false; b.walls[2] = false; }
+            else if (y === -1) { a.walls[2] = false; b.walls[0] = false; }
+        }
+
+        function generateMaze() {
+            maze = [];
+            for (let j = 0; j < cellCount; j++) {
+                for (let i = 0; i < cellCount; i++) {
+                    maze.push(new Cell(i, j));
+                }
+            }
+
+            let current = maze[0];
+            current.visited = true;
+            let stack = [];
+
+            while (true) {
+                let next = checkNeighbors(current);
+                if (next) {
+                    next.visited = true;
+                    stack.push(current);
+                    removeWalls(current, next);
+                    current = next;
+                } else if (stack.length > 0) {
+                    current = stack.pop();
+                } else {
+                    break;
+                }
+            }
+            
+            // Set exit as far as possible (bottom right)
+            exit = { x: cellCount - 1, y: cellCount - 1 };
+        }
+
+        function drawGame() {
+            ctx.fillStyle = colBg;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = colWall;
+            ctx.strokeRect(0, 0, canvas.width, canvas.height);
+
+            for (let i = 0; i < maze.length; i++) {
+                maze[i].draw();
+            }
+
+            // Draw Exit
+            drawEntity(exit.x, exit.y, colExit, '⭐');
+            
+            // Draw Player
+            drawEntity(player.x, player.y, colPlayer, '😎');
+        }
+
+        function drawEntity(x, y, color, emoji) {
+            const centerX = x * cellSize + cellSize / 2;
+            const centerY = y * cellSize + cellSize / 2;
+            const radius = cellSize / 2.5;
+
+            // Optional glowing background for entity
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+            
+            // Add emoji
+            ctx.font = `${radius * 1.2}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(emoji, centerX, centerY);
+        }
+
+        function tryMove(dx, dy) {
+            if (isGameOver) return;
+            
+            let currentCell = maze[index(player.x, player.y)];
+            
+            if (dx === 1 && currentCell.walls[1]) return;
+            if (dx === -1 && currentCell.walls[3]) return;
+            if (dy === 1 && currentCell.walls[2]) return;
+            if (dy === -1 && currentCell.walls[0]) return;
+
+            player.x += dx;
+            player.y += dy;
+
+            drawGame();
+            checkWin(); // Check win AFTER drawing the move
+        }
+
+        function animateStatBox(className) {
+            const box = document.querySelector(`.stat-box.${className}`);
+            if(box) {
+                box.style.transform = 'scale(1.15)';
+                setTimeout(() => {
+                    box.style.transform = 'scale(1)';
+                }, 200);
+            }
+        }
+
+        function checkWin() {
+            if (player.x === exit.x && player.y === exit.y) {
+                const timeBonus = timeLeft * 2;
+                const levelBonus = level * 50;
+                score += timeBonus + levelBonus;
+                level++;
+                
+                // Increase difficulty by increasing grid size occasionally up to 25
+                if(level % 2 === 0 && cellCount < 25) {
+                    cellCount += 2;
+                    cellSize = canvas.width / cellCount;
+                }
+
+                timeLeft += Math.max(10, 30 - level); // Add some time back
+                
+                updateHUD();
+                animateStatBox('score');
+                animateStatBox('level');
+                
+                // Brief pause before next level
+                isGameOver = true;
+                setTimeout(() => {
+                    isGameOver = false;
+                    initLevel();
+                }, 400);
+            }
+        }
+
+        function updateHUD() {
+            document.getElementById('level').innerText = level;
+            document.getElementById('score').innerText = score;
+            document.getElementById('time').innerText = timeLeft;
+            
+            const timeBox = document.getElementById('time').parentElement;
+            if(timeLeft <= 10) {
+                timeBox.style.animation = 'pulse 1s infinite alternate';
+                timeBox.style.background = 'linear-gradient(135deg, #c0392b, #922b21)';
+            } else {
+                timeBox.style.animation = 'none';
+                timeBox.style.background = 'linear-gradient(135deg, #e74c3c, #c0392b)';
+            }
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            clearInterval(gameInterval);
+            document.getElementById('final-level').innerText = level;
+            document.getElementById('final-score').innerText = score;
+            
+            const gameOverScreen = document.getElementById('game-over');
+            gameOverScreen.style.display = 'flex';
+            
+            // Trigger reflow to apply transition
+            void gameOverScreen.offsetWidth;
+            gameOverScreen.classList.add('show');
+        }
+
+        function initLevel() {
+            generateMaze();
+            player = { x: 0, y: 0 };
+            drawGame();
+        }
+
+        function startGame() {
+            const gameOverScreen = document.getElementById('game-over');
+            gameOverScreen.classList.remove('show');
+            setTimeout(() => {
+                gameOverScreen.style.display = 'none';
+            }, 300);
+
+            cellCount = 10;
+            cellSize = canvas.width / cellCount;
+            score = 0;
+            level = 1;
+            timeLeft = 45;
+            isGameOver = false;
+            
+            updateHUD();
+            initLevel();
+            
+            clearInterval(gameInterval);
+            gameInterval = setInterval(() => {
+                if(isGameOver) return;
+                timeLeft--;
+                updateHUD();
+                if (timeLeft <= 10 && timeLeft > 0) {
+                    // Start pulsing early
+                }
+                if (timeLeft <= 0) {
+                    gameOver();
+                }
+            }, 1000);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) {
+                e.preventDefault();
+            }
+
+            switch(e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    tryMove(0, -1); break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    tryMove(1, 0); break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    tryMove(0, 1); break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    tryMove(-1, 0); break;
+            }
+        });
+
+        // CSS for pulsating timer
+        const style = document.createElement('style');
+        style.innerHTML = `
+            @keyframes pulse {
+                0% { transform: scale(1); box-shadow: 0 0 10px #e74c3c; }
+                100% { transform: scale(1.05); box-shadow: 0 0 25px #e74c3c; }
+            }
+        `;
+        document.head.appendChild(style);
+
+        startGame();
+    </script>
+</body>
+</html>
